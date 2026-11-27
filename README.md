@@ -6,90 +6,106 @@
 
 [![Code License](https://img.shields.io/badge/Code%20License-Apache%202.0-2563eb.svg)](LICENSE)
 [![Weights License](https://img.shields.io/badge/Weights-CC%20BY--NC%204.0-f59e0b.svg)](MODEL_LICENSE.md)
-[![AUTSL Top-1](https://img.shields.io/badge/AUTSL%20Test%20Top--1-91.37%25%20(Single)%20%7C%2092.04%25%20(Ensemble)-16a34a.svg)](#benchmark-sonuçları-autsl-226-sınıf--görülmemiş-işaretçi-protokolü)
-[![Params](https://img.shields.io/badge/Parameters-1.74M%20%7C%20108.2%20MFLOPs-7c3aed.svg)](#donanım-ve-gecikme-analizi)
-[![Edge AI](https://img.shields.io/badge/Edge%20AI-ONNX%20%7C%20TensorRT%20FP16%20%7C%20Jetson%20Orin%20Nano-76b900.svg)](#3-ros2-ve-nvidia-jetson-orin-nano-entegrasyonu)
+[![AUTSL Top-1](https://img.shields.io/badge/AUTSL%20Test%20Top--1-91.37%25%20(Single)%20%7C%2092.04%25%20(Ensemble)-16a34a.svg)](#benchmarks)
+[![Params](https://img.shields.io/badge/Parameters-1.74M%20%7C%20108.2%20MFLOPs-7c3aed.svg)](#latency)
+[![Edge AI](https://img.shields.io/badge/Edge%20AI-ONNX%20%7C%20TensorRT%20FP16%20%7C%20Jetson%20Orin%20Nano-76b900.svg)](#ros2-en)
 [![ROS2](https://img.shields.io/badge/ROS2-Humble%20%7C%20Jazzy-22314e.svg)](package.xml)
+[![Release](https://img.shields.io/badge/Release-v1.0.0%20Weights-0ea5e9.svg)](https://github.com/feyyazekici/RoboSignFormer/releases)
 
-**Author / Geliştirici:** Abdullah Feyyaz Ekici
+**Author:** Abdullah Feyyaz Ekici
 
-[**🇹🇷 Türkçe Dokümantasyon**](#-türkçe-dokümantasyon) • [**🇬🇧 English Documentation**](#-english-documentation) • [**📊 Benchmark**](#-benchmark-sonuçları-autsl-226-sınıf--görülmemiş-işaretçi-protokolü) • [**🚀 Quick Start**](#-hızlı-kurulum-ve-kullanım) • [**📚 Citation**](#-atıf--citation)
+[**🇬🇧 English Documentation**](#en-docs) • [**🇹🇷 Türkçe Dokümantasyon**](#tr-docs) • [**📊 Benchmarks**](#benchmarks) • [**⚡ Latency**](#latency) • [**🚀 Quick Start**](#quickstart-en) • [**📚 Citation**](#citation)
+
+<br />
+
+<img src="assets/robosignformer_live_demo.gif" alt="RoboSignFormer Real-Time State Machine & ONNX Inference Demo" width="92%" />
+
+*Real-time `IDLE → SIGNING → CONFIRMED` state machine running live `robosignformer_jetson.onnx` (`1.74M` params, `5.16 ms` CPU) on unseen-signer 80-landmark streams (`SELAM → TESEKKUR → DOKTOR`) and publishing to `/robodost/tts_speak`.*
 
 </div>
 
 ---
 
-# 🇹🇷 Türkçe Dokümantasyon
+<a id="en-docs"></a>
 
-## 🎯 Genel Bakış ve Motivasyon
+# 🇬🇧 English Documentation
 
-Yardımcı hizmet robotlarında (**NVIDIA Jetson Orin Nano** vb. düşük güçlü gömülü sistemlerde) gerçek zamanlı Türk İşaret Dili (TİD) tanıma yapabilmek için ağır 3B-CNN veya Video-Transformer modellerinin yüksek bellek ve gecikme darboğazını aşmak gerekir. Bunun yanında gerçek dünya koşullarında:
-1. Robot kamerası karşısına geçen kişiler modelin eğitiminde hiç görülmemiş (**signer-independent**) bireylerdir,
-2. Kullanıcılar **solak veya sağlak** olabilir,
-3. Kullanıcılar masa başında (kalça kadraj dışındayken) veya **cerrahi maske** takılıyken işaret yapabilir,
-4. Aydınlatma, kıyafet ve arka plan sürekli değişir.
+## 1. Overview & Motivation
 
-**RoboSignFormer**, bu gereksinimleri karşılamak üzere geliştirilmiş **1,74 Milyon parametreli (`108,20 MFLOPs`, TensorRT FP16 `~3,39 MB`)** 4-akışlı hibrit bir iskelet Conv-Transformer mimarisidir. Model, tüm geometrik normalizasyon ve 52 kemik açısı çıkarımını doğrudan `nn.Module` / ONNX grafiğinin içinde barındırır (`PyTorch vs ONNX maks. sapma = 1.79e-06`) ve **AUTSL** veri setinin 226 sınıflı resmi **görülmemiş işaretçi (unseen-signer)** test ayrımında tekil model olarak **%91,37 Top-1 (%98,00 Top-5)**, 3-tohum topluluğunda (ensemble) ise **%92,04 Top-1 (%98,56 Top-5)** doğruluk elde eder.
+Deploying real-time Sign Language Recognition (SLR) on low-power assistive service robots (such as **NVIDIA Jetson Orin Nano 8GB**) requires overcoming the severe memory, power, and latency bottlenecks of 3D-CNN and Video-Transformer backbones while remaining robust to real-world conditions:
+1. **Unseen Signers (Signer-Independent Generalization):** Users interacting with an assistive robot are never part of the training set.
+2. **Handedness Invariance:** Signers may perform gestures using either their right or left dominant hand.
+3. **Face Masks & Partial Framing:** Signers may wear surgical masks or sit at a desk with lower-body joints outside the camera field of view.
+4. **Lighting & Background Clutter:** Appearance-based RGB models degrade rapidly outside studio environments.
+
+**RoboSignFormer** addresses these constraints through a **1.74M-parameter (`108.20 MFLOPs`, `6.79 MB` ONNX FP32 / `~3.39 MB` TensorRT FP16)** 4-stream skeletal Conv-Transformer. All biomechanical normalization and 52-bone orientation computations are embedded directly inside the `nn.Module` / ONNX computation graph (`PyTorch vs. ONNX max numerical discrepancy = 1.79e-06`). On the official **226-class AUTSL signer-independent test split**, a single distilled student model achieves **91.37% Top-1 (98.00% Top-5)** accuracy, while the 3-seed ensemble reaches **92.04% Top-1 (98.56% Top-5)**.
 
 ---
 
-## 🏗️ Mimari Yapı ve Teknik Yenilikler
+## 2. Architecture & Technical Innovations
 
 ```mermaid
 flowchart LR
-    A["Kamera Akışı\n(MediaPipe VIDEO Modu)"] --> B["32 Kare x 80 Landmark\n(8 Gövde + 30 Yüz + 42 El)\n+ Pose-Bilek El Eşleme\n+ Boşluk İnterpolasyonu"]
-    B --> C["Grafik-İçi RoboSignFeatureEngineer\n(1111 Boyut / Kare)"]
-    C --> S1["Akış 1: Omuz-Normalize Gövde\n+ Yüz & 6 Mimik Oranı"]
-    C --> S2["Akış 2: Bilek-Yerel Eller\n+ 24 El-Yüz Uzaklık Özelliği"]
-    C --> S3["Akış 3: 52 Kemik Vektörü\n& Birim Yönelim Açıları"]
-    C --> S4["Akış 4: Zamansal Hız\n(Eklem & Kemik Deltaları)"]
-    S1 & S2 & S3 & S4 --> D["Çok-Ölçekli Gruplu Conv1D\n(k=3, k=5 + SE Kanal Dikkat)"]
-    D --> E["4-Katman Pre-LN Transformer\n(d_model=192, nhead=6)"]
-    E --> F["Gated Temporal Attention Pooling\n(Aktif Olmayan Kare Bastırma)"]
-    F --> G["226 TİD Kelime Sınıfı\n(+ Solak/Sağlak Simetrik Çıkarım)"]
+    A["Camera Stream\n(MediaPipe VIDEO Mode)"] --> B["32 Frames x 80 Landmarks\n(8 Pose + 30 Face + 42 Hand)\n+ Pose-Wrist Hand Matching\n+ Short-Gap Interpolation"]
+    B --> C["In-Graph RoboSignFeatureEngineer\n(1111-D / Frame)"]
+    C --> S1["Stream 1: Shoulder-Normalized Pose\n+ Face & 6 Expression Ratios"]
+    C --> S2["Stream 2: Wrist-Local Hands\n+ 24 Hand-to-Face Distances"]
+    C --> S3["Stream 3: 52 Anatomical Bone\nVectors & Unit Directions"]
+    C --> S4["Stream 4: First-Order Temporal\nJoint & Bone Velocities"]
+    S1 & S2 & S3 & S4 --> D["Multi-Scale Grouped Conv1D\n(k=3, k=5)"]
+    D --> E["4-Layer Pre-LN Transformer\n(d_model=192, nhead=6)"]
+    E --> F["Gated Temporal Attention Pooling\n(Idle Boundary Suppression)"]
+    F --> G["226 TİD Sign Classes\n(+ Handedness-Invariant Flip)"]
 ```
 
-### Öne Çıkan Mühendislik Özellikleri
-* **Grafik-İçi Geometrik Özellik Mühendisliği (`1111-D / Kare`):** Ham `(B, 32, 80, 3)` tensörü doğrudan ONNX modeline girer; omuz açıklığına göre ölçek değişmezliği, bilek-merkezli yerel parmak koordinatları, **24 kritik el–yüz temas mesafesi** (alın, burun, çene, yanak, ağız temasları), **52 anatomik kemik birim vektörü** ve zamansal hız türevleri model grafiğinin içinde hesaplanır.
-* **4-Akışlı Uzmanlaşmış Kodlayıcı + Pre-LN Transformer:** Gövde/Mimik, El Şekli/Temas, Kemik Açısı ve Hareket Hızı akışları ayrı çok-ölçekli `Conv1D` (`k=3`, `k=5`) bloklarında işlendikten sonra birleştirilerek 4 katmanlı Pre-LN Transformer (`d=192`, `6` kafa) ve **Gated Temporal Attention Pooling** katmanına aktarılır.
-* **Cerrahi Maske Bağışıklığı (`face_ok` Gating):** İşaretçinin yüzünün maskeli olduğu veya kadrajdan çıktığı karelerde yüz/mimik kanalları otomatik olarak sıfırlanır; model Gövde + El + Kemik Açıları üzerinden kesintisiz çalışmaya devam eder.
-* **Solak / Sağlak (Handedness) Değişmezliği:** Çalışma zamanında anatomik yatay simetri (`_mirror_seq80`: sol/sağ omuz-dirsek-bilek, 10 çift simetrik yüz noktası ve sol/sağ el takası) ile kullanıcı işareti ister sağ eliyle ister sol eliyle yapsın aynı doğrulukla tanınır.
-* **Topluluktan Tekil Jetson Öğrencisine Bilgi Damıtma (Knowledge Distillation):** 3 bağımsız tohum modelinin (`Seeds: 42, 123, 2026`) yumuşak olasılık dağılımı ($\tau = 3.0$) tek bir `1,74M` parametreli öğrenci modele damıtılarak tek geçişte `%91,37` test başarısı sağlanmıştır.
+### Key Architectural Highlights
+* **In-Graph `1111-D` Biomechanical Feature Engineering:** Takes raw `(B, 32, 80, 3)` MediaPipe VIDEO coordinates directly as input and computes shoulder-span scale invariance, 6 non-manual facial expression ratios (eyebrow elevation, eye aperture, mouth opening), wrist-local finger geometry, **24 hand-to-face proximity distances** (forehead, nose, lips, chin, cheeks), **52 unit bone vectors**, and temporal velocities inside the ONNX/TensorRT graph.
+* **4-Stream Multi-Scale Conv1D + 4-Layer Pre-LN Transformer:** Processes each kinematic modality through dedicated multi-scale temporal convolutions (`k=3, k=5`) before global cross-frame fusion via a 4-layer Pre-LN Transformer (`d_model=192, nhead=6`) and **Gated Temporal Attention Pooling**.
+* **Surgical Face-Mask Immunity (`face_ok` Gating):** Automatically zeroes out facial/expression channels when facial landmarks are occluded or masked, preserving recognition accuracy via upper-body, hand, and bone-angle streams.
+* **Handedness-Invariant Runtime Inference:** Evaluates anatomical horizontal reflection (`_mirror_seq80`: swapping left/right shoulders, elbows, wrists, hips, 10 symmetric facial landmark pairs, and left/right hands) so both left-handed and right-handed signers achieve identical accuracy without model retraining.
+* **Ensemble-to-Student Knowledge Distillation:** Soft targets ($\tau = 3.0$) from 3 independent teacher seeds (`Seeds: 42, 123, 2026`) are distilled into a single `1.74M`-parameter student for single-pass edge execution.
 
-### 📐 Giriş Tensör Şeması `(B, 32, 80, 3)`
-| İndeks Aralığı | Bölge | Eklem Sayısı | Açıklama |
+### Input Tensor Specification `(B, 32, 80, 3)`
+| Index Slice | Region | Landmarks | Description |
 | :--- | :--- | :---: | :--- |
-| `0 .. 7` | **Üst Gövde (`Pose`)** | `8` | Sol/Sağ Omuz (`11,12`), Dirsek (`13,14`), Bilek (`15,16`), Kalça (`23,24`) |
-| `8 .. 37` | **Yüz & Mimik (`Face`)** | `30` | `10` orta hat (alın, burun, dudaklar, çene) + `20` simetrik kaş, göz ve yanak noktası |
-| `38 .. 58` | **Sol El (`Left Hand`)** | `21` | MediaPipe 21 el eklemi (`Pose` sol bilek Öklid eşleştirmeli) |
-| `59 .. 79` | **Sağ El (`Right Hand`)** | `21` | MediaPipe 21 el eklemi (`Pose` sağ bilek Öklid eşleştirmeli) |
+| `0 .. 7` | **Upper Body (`Pose`)** | `8` | Left/Right Shoulder (`11,12`), Elbow (`13,14`), Wrist (`15,16`), Hip (`23,24`) |
+| `8 .. 37` | **Face & Expressions (`Face`)** | `30` | `10` midline landmarks (forehead, nose, lips, chin) + `20` symmetric brow/eye/cheek pairs |
+| `38 .. 58` | **Left Hand (`LH`)** | `21` | 21 MediaPipe hand joints matched anatomically to `Pose` left wrist |
+| `59 .. 79` | **Right Hand (`RH`)** | `21` | 21 MediaPipe hand joints matched anatomically to `Pose` right wrist |
 
 ---
 
-## 📊 Benchmark Sonuçları (AUTSL 226 Sınıf — Görülmemiş İşaretçi Protokolü)
+<a id="benchmarks"></a>
 
-| Yöntem | Giriş Türü | Sınıf Sayısı | Parametre | Test Top-1 | Test Top-5 |
+## 3. Benchmark Results (AUTSL 226 Classes — Unseen-Signer Official Test Split)
+
+| Method | Input Modality | Classes | Params | Test Top-1 | Test Top-5 |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| AUTSL Baseline *(Sincan & Keleş, 2020)* | RGB CNN + BiLSTM | 226 | — | %62,02 | — |
-| TransSLR *(Yen, 2026)* | MediaPipe İskelet | 60 | 8,67 M | %80,39 | — |
-| ST-GCN + Holistic *(Marais vd., 2025)* | MediaPipe İskelet | 226 | — | %88,95 | — |
-| Graph-GRU *(Mederos vd., 2025)* | İskelet Grafiği | 226 | — | %90,04 *(Val)* | — |
-| **RoboSignFormer (3-Seed Ortalama ± Std)** | **MediaPipe 80 Eklem** | **226** | **1,74 M** | **%90,95 ± 0,35** | **%98,00 ± 0,14** |
-| **RoboSignFormer (Tekil Damıtılmış Öğrenci)** | **MediaPipe 80 Eklem** | **226** | **1,74 M** | **%91,37** | **%98,00** |
-| **RoboSignFormer (3-Seed Ensemble)** | **MediaPipe 80 Eklem** | **226** | 3 × 1,74 M | **%92,04** | **%98,56** |
+| AUTSL Baseline *(Sincan & Keleş, 2020)* | RGB CNN + BiLSTM | 226 | — | 62.02% | — |
+| TransSLR *(Yen, 2026)* | MediaPipe Skeleton | 60 | 8.67M | 80.39% | — |
+| ST-GCN + Holistic *(Marais et al., 2025)* | MediaPipe Skeleton | 226 | — | 88.95% | — |
+| Graph-GRU *(Mederos et al., 2025)* | Skeletal Graph | 226 | — | 90.04% *(Val)* | — |
+| **RoboSignFormer (3-Seed Mean ± Std)** | **MediaPipe 80-Landmark** | **226** | **1.74M** | **90.95% ± 0.35** | **98.00% ± 0.14** |
+| **RoboSignFormer (Single Distilled Student)** | **MediaPipe 80-Landmark** | **226** | **1.74M** | **91.37%** | **98.00%** |
+| **RoboSignFormer (3-Seed Ensemble)** | **MediaPipe 80-Landmark** | **226** | 3 × 1.74M | **92.04%** | **98.56%** |
 
-### ⚡ Donanım ve Gecikme Analizi (`batch_size = 1`)
-| Metrik | Değer |
-| :--- | :--- |
-| **Parametre Sayısı** | `1.741.891` (`1,74 M`) |
-| **Hesaplama Karmaşıklığı** | `108,20 MFLOPs` (`~54,10 MMACs`) |
-| **Disk Boyutu** | `6,79 MB` (ONNX FP32) / `~3,39 MB` (TensorRT FP16) |
-| **Tekil Model Çıkarım Süresi (CPU FP32)** | `5,16 ms` (`~194 tahmin/sn`) |
-| **Uçtan Uca Kamera Boru Hattı (MediaPipe VIDEO + ONNX CPU)** | `39,43 ms` (`~25,4 FPS`) |
+<a id="latency"></a>
 
-### 🎯 Gated Temporal Attention Pooling Görselleştirmesi (Aktif Kare Seçimi)
+### ⚡ Hardware Complexity & Latency Profile (`batch_size = 1`)
 
-Klasik tekdüze ortalama (`1/32`, kırmızı kesikli çizgi) elin henüz kalkmadığı veya indiği boş kenar kareleri de hesaba katarak gürültü üretir. **RoboSignFormer** içindeki **Gated Temporal Attention Pooling** katmanı ise `0..6` ve `25..31` arasındaki boş/hazırlık karelerinin ağırlığını **`0.00`'a** bastırıp yalnızca işaretin anlam taşıdığı merkez karelere odaklanır:
+| Metric / Execution Target | Measured Value | Notes |
+| :--- | :--- | :--- |
+| **Parameter Count & FLOPs** | `1,741,891` (`1.74M`) • `108.20 MFLOPs` | `~54.10 MMACs` per 32-frame clip |
+| **Serialized Model Size** | `6.79 MB` (ONNX FP32) • `~3.39 MB` (TRT FP16) | Peak GPU VRAM during inference: **`91.46 MB`** |
+| **CPU Inference Latency (ONNXRuntime FP32)** | **`5.16 ms`** mean (`5.34 ms` P95 • `194 inf/s`) | Single-clip forward pass (`1 × 32 × 80 × 3`) |
+| **CUDA GPU Inference Latency (PyTorch AMP FP16)** | **`7.89 ± 0.20 ms`** (`7.85 ms` P50 • `8.03 ms` P95) | Measured on cloud CUDA GPU (`batch_size = 1`) |
+| **MediaPipe VIDEO Extraction (`640×480`)** | `34.27 ms` / frame (`35.41 ms` P95) | `pose_landmarker_lite` + `face` + `hand` (`VIDEO` tracking mode) |
+| **End-to-End CPU Pipeline (MediaPipe + ONNX)** | **`39.43 ms` / frame (`~25.4 FPS`)** | Zero discrete GPU required |
+| **NVIDIA Jetson Orin Nano 8GB (TensorRT FP16)** | *Target Edge Platform (`JetPack 6`)* | Graph verified (`PyTorch vs ONNX diff = 1.79e-06`, `91.5 MB` VRAM); physical on-board `trtexec` timing pending |
+
+### 🎯 Gated Temporal Attention Pooling Visualization
+
+Standard uniform temporal averaging (`1/32`, dashed red line) dilutes sign representations with idle preparation/recovery frames. **Gated Temporal Attention Pooling** suppresses boundary idle frames (`0..6` and `25..31`) to **`0.00`** while concentrating weight on the active signing core:
 
 <p align="center">
   <img src="assets/gated_temporal_attention.png" alt="RoboSignFormer Gated Temporal Attention Pooling Weights" width="94%" />
@@ -97,48 +113,49 @@ Klasik tekdüze ortalama (`1/32`, kırmızı kesikli çizgi) elin henüz kalkmad
 
 ---
 
-## 📂 Depo Klasör Yapısı
+## 4. Repository Structure & Weight Management
 
 ```text
 RoboSignFormer/
 ├── assets/
-│   └── gated_temporal_attention.png     # Gated Temporal Attention Pooling kare ağırlık analizi grafiği
+│   ├── robosignformer_live_demo.gif     # Live state-machine & ONNX Top-3 telemetry demo
+│   └── gated_temporal_attention.png     # Gated Temporal Attention Pooling weight distribution
 ├── models/
-│   ├── robosignformer_jetson.onnx       # Dağıtıma hazır tek parça ONNX modeli (FP32, 6.8 MB)
-│   ├── best_robosignformer_jetson.pt    # Damıtılmış PyTorch model ağırlıkları ve gömme (embedding) katmanı
-│   ├── robosignformer_config.json       # 226 TİD sınıf haritası, landmark indeksleri ve 52 kemik tanımı
-│   ├── pose_landmarker.task             # MediaPipe Pose VIDEO görev paketi
-│   ├── face_landmarker.task             # MediaPipe Face VIDEO görev paketi
-│   └── hand_landmarker.task             # MediaPipe Hand VIDEO görev paketi
+│   ├── robosignformer_jetson.onnx       # Self-contained ONNX FP32 model (6.8 MB, in-graph features)
+│   ├── best_robosignformer_jetson.pt    # Distilled PyTorch checkpoint (6.8 MB)
+│   ├── robosignformer_config.json       # 226-class vocabulary, landmark indices & 52 bone pairs
+│   └── {pose,face,hand}_landmarker.task # MediaPipe VIDEO task bundles
 ├── robosignformer/
 │   ├── __init__.py
-│   ├── pipeline.py                      # Gerçek zamanlı durum makineli (IDLE/SIGNING) çıkarım motoru
-│   └── sign_node.py                     # ROS2 Humble / Jazzy kamera ve TTS düğümü
+│   ├── pipeline.py                      # ONNXRuntime / TensorRT .engine state-machine pipeline
+│   └── sign_node.py                     # ROS2 Humble / Jazzy camera & TTS publisher node
 ├── notebooks/
-│   └── RoboSignFormer.ipynb             # Eğitim, ablasyon, bilgi damıtma ve ONNX dışa aktarma defteri
-├── pc_webcam_demo.py                    # ROS2/PyTorch gerektirmeyen bağımsız PC canlı kamera uygulaması
-├── package.xml & setup.py               # Standart ROS2 ament_python paket yapılandırması
-├── requirements.txt                     # Minimal çalışma zamanı bağımlılıkları
-├── LICENSE                              # Kaynak kodu lisansı (Apache-2.0)
-├── MODEL_LICENSE.md                     # Model ağırlıkları lisansı (CC BY-NC 4.0)
-└── CITATION.cff                         # Akademik atıf üstverisi
+│   └── RoboSignFormer.ipynb             # Reproducible training, distillation & ONNX export notebook
+├── pc_webcam_demo.py                    # Standalone PC webcam runner (no ROS2 or PyTorch needed)
+├── package.xml & setup.py               # ROS2 ament_python build configuration
+├── requirements.txt                     # Minimal runtime dependencies
+└── LICENSE, MODEL_LICENSE.md, NOTICE, CITATION.cff
 ```
+
+> **Weight Storage Policy:** Baseline `v1.0.0` runtime artifacts (`~30.7 MB` total, each file `< 8 MB`) are included for zero-friction single-command setup on offline robotics workstations and archived under [**GitHub Releases (`v1.0.0`)**](https://github.com/feyyazekici/RoboSignFormer/releases). Subsequent model checkpoints (`v1.1+`) are distributed exclusively via GitHub Releases to keep Git history compact.
 
 ---
 
-## 🚀 Hızlı Kurulum ve Kullanım
+<a id="quickstart-en"></a>
 
-### 1) PC / Laptop Canlı Kamera Testi (ROS2 veya PyTorch Gerektirmez)
+## 5. Quick Start & Deployment
+
+### A) Standalone PC / Laptop Live Webcam Demo (No ROS2 or PyTorch Required)
 ```bash
 git clone https://github.com/feyyazekici/RoboSignFormer.git
 cd RoboSignFormer
 pip install -r requirements.txt
 python pc_webcam_demo.py
 ```
-* Kameranın karşısına geçip elinizi kaldırarak TİD işaretini yapın ve elinizi indirin; durum makinesi (`IDLE -> SIGNING -> IDLE`) aktif hareket bölgesini otomatik kırpıp 32 kareye örnekleyerek anında Türkçe kelime tahminini ve Top-3 olasılıklarını ekranda gösterir.
-* Klavye kısayolları: **`[m]`** Ayna (selfie) görünümü aç/kapat • **`[q]`** Çıkış.
+* Raise your hand above waist level to perform a TİD sign, then lower your hand; the `IDLE → SIGNING → IDLE` state machine automatically segments the active clip, resamples to 32 frames, and displays Top-3 predictions.
+* Controls: **`[m]`** toggle mirror view • **`[q]`** quit.
 
-### 2) Python Kodu İçinden Kullanım (SDK)
+### B) Python SDK Usage
 ```python
 import cv2
 from robosignformer.pipeline import RoboSignFormerPipeline
@@ -152,7 +169,7 @@ while cap.isOpened():
         break
     word, score_pct, vis = pipe.process_frame(frame, draw_hud=True)
     if word:
-        print(f"Algılanan TİD Kelimesi: {word} (%{score_pct})")
+        print(f"Confirmed TİD Sign: {word} ({score_pct}%)")
     cv2.imshow("RoboSignFormer", vis)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
@@ -161,7 +178,9 @@ cap.release()
 pipe.close()
 ```
 
-### 3) ROS2 ve NVIDIA Jetson Orin Nano Entegrasyonu
+<a id="ros2-en"></a>
+
+### C) ROS2 Humble / Jazzy & NVIDIA Jetson Orin Nano TensorRT Deployment
 ```bash
 cd ~/ros2_ws/src
 git clone https://github.com/feyyazekici/RoboSignFormer.git
@@ -169,42 +188,61 @@ cd ~/ros2_ws
 colcon build --packages-select robosignformer
 source install/setup.bash
 
-# (İsteğe Bağlı) Jetson Orin Nano üzerinde TensorRT FP16 motoru derleme:
+# Option 1 — Automatic ONNXRuntime-TensorRT FP16 Engine Caching (Default on Jetson):
+ros2 run robosignformer sign_node --ros-args -p trt_fp16:=true
+
+# Option 2 — Pre-compiled Standalone TensorRT FP16 .engine via trtexec:
 /usr/src/tensorrt/bin/trtexec \
   --onnx=src/RoboSignFormer/models/robosignformer_jetson.onnx \
   --saveEngine=src/RoboSignFormer/models/robosignformer_fp16.engine \
   --fp16
 
-# Düğümü başlat:
-ros2 run robosignformer sign_node
+ros2 run robosignformer sign_node --ros-args \
+  -p engine_path:=src/RoboSignFormer/models/robosignformer_fp16.engine \
+  -p conf_threshold:=0.55
 ```
 
-#### 🔌 ROS2 Haberleşme Kanalları (Topics)
-| Topic Adı | Mesaj Tipi | Yön | Açıklama |
+#### ROS2 Topics & Parameters
+| Topic / Parameter | Type | Direction | Description |
 | :--- | :--- | :---: | :--- |
-| `/camera/image_raw` | `sensor_msgs/Image` | Giriş | Robot kamerasından gelen BGR/RGB ham görüntü akışı |
-| **`/robodost/tts_speak`** | **`std_msgs/String`** | **Çıkış** | Algılanan Türkçe kelimeyi doğrudan Piper TTS seslendirme düğümüne iletir |
-| `/robodost/sign_update` | `VisionUpdate` / `std_msgs/String` | Çıkış | Yapılandırılmış JSON çıktısı (`word`, `confidence`, `top3`) |
+| `/camera/image_raw` | `sensor_msgs/Image` | Input | Raw BGR/RGB camera stream (`camera_topic` param) |
+| **`/robodost/tts_speak`** | **`std_msgs/String`** | **Output** | Recognized Turkish gloss published for downstream TTS nodes (e.g., Piper) |
+| `/robodost/sign_update` | `VisionUpdate` / `String` | Output | Structured JSON (`kelime`, `guven_skoru`, `nesne_bulundu`) |
+| `/robodost/sign_debug_image` | `sensor_msgs/Image` | Output | Annotated skeletal HUD stream (rendered lazily only when subscribed) |
+| `engine_path` / `trt_fp16` | `string` / `bool` | Param | Path to compiled `.engine` file, or `trt_fp16:=true` for ONNXRuntime-TRT caching |
 
 ---
 ---
 
-# 🇬🇧 English Documentation
+<a id="tr-docs"></a>
 
-## 🎯 Overview
+# 🇹🇷 Türkçe Dokümantasyon
 
-**RoboSignFormer** is an ultra-lightweight (**1.74M parameters**, **108.20 MFLOPs**, `~3.39 MB` in FP16) 4-stream skeletal Conv-Transformer engineered for real-time **signer-independent Turkish Sign Language (TİD)** recognition on embedded assistive robots (**NVIDIA Jetson Orin Nano**) and standard CPUs.
+## 1. Genel Bakış ve Motivasyon
 
-Unlike heavy RGB video backbones that suffer from lighting shifts, background clutter, signer appearance bias, and high memory footprints, **RoboSignFormer** embeds all geometric normalization and anatomical bone-vector computation directly inside its exported computation graph (`PyTorch vs. ONNX max discrepancy = 1.79e-06`). On the official **226-class AUTSL unseen-signer test benchmark**, a single distilled student achieves **91.37% Top-1 (98.00% Top-5)** accuracy, while the 3-seed ensemble reaches **92.04% Top-1 (98.56% Top-5)**.
+Düşük güç tüketimli yardımcı hizmet robotlarında (**NVIDIA Jetson Orin Nano 8GB** vb.) gerçek zamanlı Türk İşaret Dili (TİD) tanıma yapabilmek için ağır 3B-CNN ve Video-Transformer modellerinin yüksek bellek ve gecikme darboğazını aşmak gerekir. Ayrıca gerçek kullanım ortamında:
+1. Robot kamerası karşısındaki kişiler eğitim kümesinde yer almayan (**görülmemiş işaretçi / signer-independent**) bireylerdir,
+2. Kullanıcılar işareti **sağ veya sol baskın elleriyle** yapabilir,
+3. Kullanıcılar masa başında (alt gövde kadraj dışındayken) veya **cerrahi maske** takılıyken işaret yapabilir,
+4. Aydınlatma ve arka plan sürekli değişir.
 
-### Key Capabilities
-* **In-Graph `1111-D` Biomechanical Feature Engineering:** Accepts raw `(B, 32, 80, 3)` MediaPipe VIDEO landmarks and computes shoulder-span normalized body/face coordinates, 6 non-manual facial expression ratios (eyebrow raise, eye aperture, mouth opening), wrist-local hand coordinates, **24 hand-to-face proximity features**, **52 anatomical unit bone vectors**, and first-order temporal velocities inside the ONNX graph.
-* **4-Stream Multi-Scale Conv1D + 4-Layer Pre-LN Transformer:** Dedicated local temporal convolutions (`k=3, 5`) per modality followed by global self-attention (`d_model=192, nhead=6`) and **Gated Temporal Attention Pooling** to suppress idle boundary frames.
-* **Surgical Mask Immunity (`face_ok` Gating):** Automatically masks out facial streams when the signer wears a face mask or steps partially out of frame, maintaining robust recognition via upper-body + hand + bone streams.
-* **Handedness-Invariant Inference:** Evaluates anatomical horizontal reflection (`_mirror_seq80`) at runtime so both left-handed and right-handed signers achieve identical accuracy without retraining.
-* **Self-Contained Edge Deployment:** Ships with self-contained ONNX weights, MediaPipe `.task` bundles, a zero-ROS standalone webcam runner (`pc_webcam_demo.py`), and a native ROS2 Humble/Jazzy node (`sign_node`).
+**RoboSignFormer**, bu gereksinimleri karşılamak üzere geliştirilmiş **1,74 Milyon parametreli (`108,20 MFLOPs`, `6,79 MB` ONNX FP32 / `~3,39 MB` TensorRT FP16)** 4-akışlı hibrit bir iskelet Conv-Transformer mimarisidir. Tüm geometrik normalizasyon ve 52 kemik açısı hesabı doğrudan `nn.Module` / ONNX grafiğinin içindedir (`PyTorch vs. ONNX maks. fark = 1.79e-06`). **AUTSL** 226 sınıf resmi **görülmemiş işaretçi** test ayrımında tekil damıtılmış model **%91,37 Top-1 (%98,00 Top-5)**, 3-tohum topluluğu (ensemble) ise **%92,04 Top-1 (%98,56 Top-5)** doğruluk elde eder.
 
-### Quick Start (English)
+---
+
+## 2. Mimari Öne Çıkanlar
+
+* **Grafik-İçi `1111-B` Geometrik Özellik Mühendisliği:** Ham `(B, 32, 80, 3)` MediaPipe VIDEO koordinatlarını doğrudan giriş olarak kabul eder; omuz açıklığına göre ölçek normalizasyonu, 6 yüz/mimik oranı (kaş kaldırma, göz açıklığı, ağız açıklığı), bilek-yerel el koordinatları, **24 el–yüz yakınlık mesafesi**, **52 birim kemik vektörü** ve zamansal hız türevlerini model grafiğinin içinde hesaplar.
+* **4-Akışlı Çok-Ölçekli Conv1D + 4-Katman Pre-LN Transformer:** Her kinematik akışı ayrı `Conv1D` (`k=3, k=5`) katmanlarından geçirip 4 katmanlı Pre-LN Transformer (`d_model=192, nhead=6`) ve boş kenar kareleri bastıran **Gated Temporal Attention Pooling** ile birleştirir.
+* **Cerrahi Maske Bağışıklığı (`face_ok` Gating):** Yüz noktalarının maskelendiği veya kadrajdan çıktığı karelerde yüz kanallarını otomatik sıfırlayarak Gövde + El + Kemik Açıları üzerinden kesintisiz tahmin üretir.
+* **Solak / Sağlak Değişmezliği (`_mirror_seq80`):** Çalışma zamanında anatomik yatay yansıtma ile sol/sağ omuz-dirsek-bilek, 10 çift simetrik yüz noktası ve sol/sağ el takasını değerlendirerek her iki el yöneliminde de aynı doğruluğu sağlar.
+* **Bilgi Damıtma (Knowledge Distillation):** 3 bağımsız tohum modelinin (`Seeds: 42, 123, 2026`) bilgisi ($\tau = 3.0$) tek bir `1,74M` parametreli öğrenci modele damıtılmıştır *(Karşılaştırmalı doğruluk ve donanım gecikme tabloları için yukarıdaki [Benchmarks](#benchmarks) ve [Latency](#latency) bölümlerine bakınız).*
+
+---
+
+## 3. Hızlı Kurulum ve ROS2 / TensorRT Dağıtımı
+
+### A) Bağımsız PC / Dizüstü Canlı Kamera Çalıştırma (ROS2 veya PyTorch Gerektirmez)
 ```bash
 git clone https://github.com/feyyazekici/RoboSignFormer.git
 cd RoboSignFormer
@@ -212,18 +250,42 @@ pip install -r requirements.txt
 python pc_webcam_demo.py
 ```
 
+### B) ROS2 Humble / Jazzy ve NVIDIA Jetson Orin Nano TensorRT Entegrasyonu
+```bash
+cd ~/ros2_ws/src
+git clone https://github.com/feyyazekici/RoboSignFormer.git
+cd ~/ros2_ws
+colcon build --packages-select robosignformer
+source install/setup.bash
+
+# Seçenek 1 — Otomatik ONNXRuntime-TensorRT FP16 Önbellekleme (Varsayılan):
+ros2 run robosignformer sign_node --ros-args -p trt_fp16:=true
+
+# Seçenek 2 — trtexec ile Derlenmiş Bağımsız TensorRT FP16 (.engine) Bağlama:
+/usr/src/tensorrt/bin/trtexec \
+  --onnx=src/RoboSignFormer/models/robosignformer_jetson.onnx \
+  --saveEngine=src/RoboSignFormer/models/robosignformer_fp16.engine \
+  --fp16
+
+ros2 run robosignformer sign_node --ros-args \
+  -p engine_path:=src/RoboSignFormer/models/robosignformer_fp16.engine \
+  -p conf_threshold:=0.55
+```
+
 ---
 
-## 📄 Lisans / License
+## 📄 License / Lisans
 
-* **Kaynak Kodu / Source Code:** [Apache License 2.0](LICENSE) — Telif Hakkı / Copyright © 2026 **Abdullah Feyyaz Ekici**.
-* **Eğitilmiş Model Ağırlıkları / Pretrained Weights:** `AUTSL` veri setinin akademik paylaşım koşulları gereği eğitilmiş ağırlıklar (`robosignformer_jetson.onnx`, `best_robosignformer_jetson.pt`) [CC BY-NC 4.0](MODEL_LICENSE.md) (Ticari Olmayan Akademik/Araştırma Kullanımı) lisansı ile sunulmaktadır. Ticari kullanım için mimari ticari izinli veriyle yeniden eğitilebilir veya veri seti sahiplerinden yetki alınabilir.
+* **Source Code / Kaynak Kodu:** [Apache License 2.0](LICENSE) — Copyright © 2026 **Abdullah Feyyaz Ekici**.
+* **Pretrained Weights / Eğitilmiş Model Ağırlıkları:** Released under [CC BY-NC 4.0](MODEL_LICENSE.md) in accordance with the academic non-commercial sharing terms of the **AUTSL** dataset *(Sincan & Keleş, 2020)*. See [NOTICE](NOTICE) for third-party component attributions.
 
 ---
 
-## 📚 Atıf / Citation
+<a id="citation"></a>
 
-Bu modeli, mimariyi veya çıkarım boru hattını akademik çalışmalarınızda ya da robotik projelerinizde kullanırsanız lütfen aşağıdaki şekilde atıf yapınız / If you use **RoboSignFormer** in your research or robotics system, please cite:
+## 📚 Citation / Atıf
+
+If you use **RoboSignFormer** in your research, thesis, or robotics system, please cite / Akademik çalışmalarınızda veya robotik sistemlerinizde kullanırsanız lütfen aşağıdaki şekilde atıf yapınız:
 
 ```bibtex
 @software{ekici2026robosignformer,
@@ -231,6 +293,7 @@ Bu modeli, mimariyi veya çıkarım boru hattını akademik çalışmalarınızd
   title        = {RoboSignFormer: An Ultra-Lightweight 4-Stream Skeletal Conv-Transformer for Signer-Independent Turkish Sign Language Recognition on Edge Robotics},
   year         = {2026},
   version      = {1.0.0},
+  url          = {https://github.com/feyyazekici/RoboSignFormer},
   license      = {Apache-2.0}
 }
 ```

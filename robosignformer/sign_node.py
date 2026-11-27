@@ -28,6 +28,8 @@ class SignNode(Node):
         super().__init__("sign_node")
 
         self.declare_parameter("model_dir", "")
+        self.declare_parameter("engine_path", "")
+        self.declare_parameter("trt_fp16", True)
         self.declare_parameter("camera_topic", "/camera/image_raw")
         self.declare_parameter("sign_topic", "/robodost/sign_update")
         self.declare_parameter("tts_topic", "/robodost/tts_speak")
@@ -37,6 +39,8 @@ class SignNode(Node):
         self.declare_parameter("show_debug_window", False)
 
         model_dir = self.get_parameter("model_dir").get_parameter_value().string_value
+        engine_path = self.get_parameter("engine_path").get_parameter_value().string_value
+        trt_fp16 = self.get_parameter("trt_fp16").get_parameter_value().bool_value
         camera_topic = self.get_parameter("camera_topic").get_parameter_value().string_value
         sign_topic = self.get_parameter("sign_topic").get_parameter_value().string_value
         tts_topic = self.get_parameter("tts_topic").get_parameter_value().string_value
@@ -47,6 +51,8 @@ class SignNode(Node):
 
         self.pipeline = RoboSignFormerPipeline(
             model_dir=model_dir,
+            engine_path=engine_path,
+            trt_fp16=trt_fp16,
             conf_threshold=conf_threshold,
             mirror_camera=mirror_camera,
         )

@@ -42,11 +42,45 @@ def _resolve_model_dir(preferred_dir: str = "") -> str:
     )
 
 
+class _TensorRTEngineRunner:
+    """
+    `trtexec --fp16` ile derlenmiş bağımsız TensorRT `.engine` dosyasını TensorRT 8.6+/10.x
+    (`JetPack 6` / `execute_async_v3`) API'si üzerinden doğrudan GPU'da çalıştırır.
+    """
+
+    def __init__(self, engine_path: str):
+        import tensorrt as trt
+        import torch
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("TensorRT .engine çalıştırmak için CUDA destekli bir GPU gereklidir.")
+        self._torch = torch
+        logger = trt.Logger(trt.Logger.WARNING)
+        with open(engine_path, "rb") as f_eng, trt.Runtime(logger) as runtime:
+            self.engine = runtime.deserialize_cuda_engine(f_eng.read())
+        if self.engine is None:
+            raise RuntimeError(f"TensorRT motoru yüklenemedi: {engine_path}")
+        self.context = self.engine.create_execution_context()
+        self.stream = torch.cuda.Stream()
+        self.in_name = self.engine.get_tensor_name(0)
+        self.out_name = self.engine.get_tensor_name(1)
+        out_shape = tuple(self.engine.get_tensor_shape(self.out_name))
+        self._out_gpu = torch.empty(out_shape, dtype=torch.float32, device="cuda")
+
+    def run_logits(self, inp_np: np.ndarray) -> np.ndarray:
+        inp_gpu = self._torch.from_numpy(np.ascontiguousarray(inp_np, dtype=np.float32)).cuda()
+        self.context.set_tensor_address(self.in_name, int(inp_gpu.data_ptr()))
+        self.context.set_tensor_address(self.out_name, int(self._out_gpu.data_ptr()))
+        self.context.execute_async_v3(stream_handle=self.stream.cuda_stream)
+        self.stream.synchronize()
+        return self._out_gpu.cpu().numpy()[0]
+
+
 class RoboSignFormerPipeline:
     """
     RoboSignFormer Gerçek Zamanlı Türk İşaret Dili Tanıma Boru Hattı (AUTSL 226 Sınıf).
     - 1.74M parametre, 108.20 MFLOPs, %91.37 tek-model (görülmemiş işaretçi) test doğruluğu.
-    - PC (CPU/CUDA) ve NVIDIA Jetson Orin Nano (TensorRT/CUDA) üzerinde ONNXRuntime ile çalışır.
+    - PC (CPU/CUDA) ve NVIDIA Jetson Orin Nano (ONNXRuntime-TRT FP16 veya bağımsız `.engine`) ile çalışır.
     """
 
     SLICE_POSE = slice(0, 8)
@@ -57,6 +91,8 @@ class RoboSignFormerPipeline:
     def __init__(
         self,
         model_dir: str = "",
+        engine_path: str = "",
+        trt_fp16: bool = True,
         conf_threshold: float = 0.55,
         mirror_camera: bool = False,
         min_sign_frames: int = 10,
@@ -64,9 +100,6 @@ class RoboSignFormerPipeline:
         idle_end_frames: int = 6,
         live_preview_stride: int = 10,
     ):
-        if not _HAS_ORT:
-            raise ImportError("Lütfen 'pip install onnxruntime' (veya GPU için onnxruntime-gpu) kurun.")
-
         self.model_dir = _resolve_model_dir(model_dir)
         cfg_path = os.path.join(self.model_dir, "robosignformer_config.json")
         onnx_path = os.path.join(self.model_dir, "robosignformer_jetson.onnx")
@@ -88,15 +121,42 @@ class RoboSignFormerPipeline:
         self.idle_end_frames = int(idle_end_frames)
         self.live_preview_stride = int(live_preview_stride)
 
-        available = ort.get_available_providers()
-        preferred = [p for p in ("TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider") if p in available]
-        # Windows Türkçe klasör yolu (Ü, ı, ö, ş, ç) uyumluluğu için byte dizisi üzerinden yükle
-        with open(onnx_path, "rb") as f_onnx:
-            onnx_bytes = f_onnx.read()
-        self.ort_session = ort.InferenceSession(onnx_bytes, providers=preferred or ["CPUExecutionProvider"])
-        self.input_name = self.ort_session.get_inputs()[0].name
-        self.output_name = self.ort_session.get_outputs()[0].name
-        print(f"🤖 [RoboSignFormer] ONNX aktif ({self.ort_session.get_providers()[0]}) -> {onnx_path}")
+        self._trt_runner: _TensorRTEngineRunner | None = None
+        self.ort_session = None
+
+        resolved_engine = engine_path.strip() if engine_path else ""
+        if resolved_engine and not os.path.isfile(resolved_engine):
+            cand_eng = os.path.join(self.model_dir, os.path.basename(resolved_engine))
+            if os.path.isfile(cand_eng):
+                resolved_engine = cand_eng
+
+        if resolved_engine and os.path.isfile(resolved_engine):
+            self._trt_runner = _TensorRTEngineRunner(resolved_engine)
+            print(f"⚡ [RoboSignFormer] TensorRT FP16 Engine aktif -> {resolved_engine}")
+        else:
+            if not _HAS_ORT:
+                raise ImportError("Lütfen 'pip install onnxruntime' (veya GPU için onnxruntime-gpu) kurun.")
+            available = ort.get_available_providers()
+            providers = []
+            if "TensorrtExecutionProvider" in available:
+                providers.append((
+                    "TensorrtExecutionProvider",
+                    {
+                        "trt_fp16_enable": bool(trt_fp16),
+                        "trt_engine_cache_enable": True,
+                        "trt_engine_cache_path": self.model_dir,
+                    },
+                ))
+            if "CUDAExecutionProvider" in available:
+                providers.append("CUDAExecutionProvider")
+            providers.append("CPUExecutionProvider")
+
+            with open(onnx_path, "rb") as f_onnx:
+                onnx_bytes = f_onnx.read()
+            self.ort_session = ort.InferenceSession(onnx_bytes, providers=providers)
+            self.input_name = self.ort_session.get_inputs()[0].name
+            self.output_name = self.ort_session.get_outputs()[0].name
+            print(f"🤖 [RoboSignFormer] ONNX aktif ({self.ort_session.get_providers()[0]}) -> {onnx_path}")
 
         pose_task = os.path.join(self.model_dir, "pose_landmarker.task")
         face_task = os.path.join(self.model_dir, "face_landmarker.task")
@@ -265,16 +325,19 @@ class RoboSignFormerPipeline:
         exp_l = np.exp(shifted)
         return exp_l / np.sum(exp_l)
 
+    def _infer_logits_1d(self, inp_1x32x80x3: np.ndarray) -> np.ndarray:
+        if self._trt_runner is not None:
+            return self._trt_runner.run_logits(inp_1x32x80x3)
+        return self.ort_session.run([self.output_name], {self.input_name: inp_1x32x80x3})[0][0]
+
     def predict_sequence(self, raw_frames: list[np.ndarray]) -> list[tuple[str, float]]:
         seq_32 = self._prepare_32_frames(raw_frames)
         inp_raw = seq_32[np.newaxis, ...].astype(np.float32)
-        logits_raw = self.ort_session.run([self.output_name], {self.input_name: inp_raw})[0][0]
-        probs_raw = self._softmax_1d(logits_raw)
+        probs_raw = self._softmax_1d(self._infer_logits_1d(inp_raw))
 
         seq_mir = self._mirror_seq80(seq_32)
         inp_mir = seq_mir[np.newaxis, ...].astype(np.float32)
-        logits_mir = self.ort_session.run([self.output_name], {self.input_name: inp_mir})[0][0]
-        probs_mir = self._softmax_1d(logits_mir)
+        probs_mir = self._softmax_1d(self._infer_logits_1d(inp_mir))
 
         probs = probs_raw if float(np.max(probs_raw)) >= float(np.max(probs_mir)) else probs_mir
         top_idx = np.argsort(probs)[::-1][:3]
