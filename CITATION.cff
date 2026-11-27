@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use RoboSignFormer in your research, thesis, or robotics system, please cite it using the metadata below."
+title: "RoboSignFormer: An Ultra-Lightweight 4-Stream Skeletal Conv-Transformer for Signer-Independent Turkish Sign Language Recognition on Edge Robotics"
+type: software
+authors:
+  - family-names: "Ekici"
+    given-names: "Abdullah Feyyaz"
+version: 1.0.0
+date-released: 2026-11-27
+license: Apache-2.0
+repository-code: "https://github.com/feyyazekici/RoboSignFormer"
+url: "https://github.com/feyyazekici/RoboSignFormer"
+keywords:
+  - turkish-sign-language
+  - sign-language-recognition
+  - autsl
+  - skeletal-transformer
+  - edge-ai
+  - jetson-orin-nano
+  - ros2
