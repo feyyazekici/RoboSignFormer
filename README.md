@@ -8,7 +8,7 @@
 [![Weights License](https://img.shields.io/badge/Weights-CC%20BY--NC%204.0-f59e0b.svg)](MODEL_LICENSE.md)
 [![AUTSL Top-1](https://img.shields.io/badge/AUTSL%20Test%20Top--1-91.37%25%20(Single)%20%7C%2092.04%25%20(Ensemble)-16a34a.svg)](#benchmark-sonuçları-autsl-226-sınıf--görülmemiş-işaretçi-protokolü)
 [![Params](https://img.shields.io/badge/Parameters-1.74M%20%7C%20108.2%20MFLOPs-7c3aed.svg)](#donanım-ve-gecikme-analizi)
-[![Edge AI](https://img.shields.io/badge/Edge%20AI-ONNX%20%7C%20TensorRT%20FP16%20%7C%20Jetson%20Orin%20Nano-76b900.svg)](#2-robot-ekibi-için-ros2--nvidia-jetson-orin-nano-kurulumu)
+[![Edge AI](https://img.shields.io/badge/Edge%20AI-ONNX%20%7C%20TensorRT%20FP16%20%7C%20Jetson%20Orin%20Nano-76b900.svg)](#3-ros2-ve-nvidia-jetson-orin-nano-entegrasyonu)
 [![ROS2](https://img.shields.io/badge/ROS2-Humble%20%7C%20Jazzy-22314e.svg)](package.xml)
 
 **Author / Geliştirici:** Abdullah Feyyaz Ekici
@@ -113,7 +113,7 @@ RoboSignFormer/
 ├── robosignformer/
 │   ├── __init__.py
 │   ├── pipeline.py                      # Gerçek zamanlı durum makineli (IDLE/SIGNING) çıkarım motoru
-│   └── sign_node.py                     # Tak-çalıştır ROS2 Humble / Jazzy kamera ve TTS düğümü
+│   └── sign_node.py                     # ROS2 Humble / Jazzy kamera ve TTS düğümü
 ├── notebooks/
 │   └── RoboSignFormer.ipynb             # Eğitim, ablasyon, bilgi damıtma ve ONNX dışa aktarma defteri
 ├── pc_webcam_demo.py                    # ROS2/PyTorch gerektirmeyen bağımsız PC canlı kamera uygulaması
@@ -161,7 +161,7 @@ cap.release()
 pipe.close()
 ```
 
-### 3) Robot Ekibi İçin ROS2 & NVIDIA Jetson Orin Nano Kurulumu
+### 3) ROS2 ve NVIDIA Jetson Orin Nano Entegrasyonu
 ```bash
 cd ~/ros2_ws/src
 git clone https://github.com/feyyazekici/RoboSignFormer.git
@@ -202,7 +202,7 @@ Unlike heavy RGB video backbones that suffer from lighting shifts, background cl
 * **4-Stream Multi-Scale Conv1D + 4-Layer Pre-LN Transformer:** Dedicated local temporal convolutions (`k=3, 5`) per modality followed by global self-attention (`d_model=192, nhead=6`) and **Gated Temporal Attention Pooling** to suppress idle boundary frames.
 * **Surgical Mask Immunity (`face_ok` Gating):** Automatically masks out facial streams when the signer wears a face mask or steps partially out of frame, maintaining robust recognition via upper-body + hand + bone streams.
 * **Handedness-Invariant Inference:** Evaluates anatomical horizontal reflection (`_mirror_seq80`) at runtime so both left-handed and right-handed signers achieve identical accuracy without retraining.
-* **Plug-and-Play Edge Deployment:** Ships with self-contained ONNX weights, MediaPipe `.task` bundles, a zero-ROS standalone webcam runner (`pc_webcam_demo.py`), and a native ROS2 Humble/Jazzy node (`sign_node`).
+* **Self-Contained Edge Deployment:** Ships with self-contained ONNX weights, MediaPipe `.task` bundles, a zero-ROS standalone webcam runner (`pc_webcam_demo.py`), and a native ROS2 Humble/Jazzy node (`sign_node`).
 
 ### Quick Start (English)
 ```bash

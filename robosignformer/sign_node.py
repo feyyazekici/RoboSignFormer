@@ -21,7 +21,7 @@ class SignNode(Node):
     """
     RoboSignFormer Türk İşaret Dili Tanıma ROS2 Düğümü.
     Hem standart '/robodost/tts_speak' (std_msgs/String) hem de '/robodost/sign_update' yayınlar;
-    böylece Piper TTS ve LLM ekibi hiçbir ek kurulum yapmadan algılanan işareti seslendirebilir.
+    böylece herhangi bir TTS (örn. Piper) veya LLM düğümü ek bir arayüz yazmadan algılanan işareti kullanabilir.
     """
 
     def __init__(self):
