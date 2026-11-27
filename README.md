@@ -20,7 +20,7 @@
 
 <img src="assets/robosignformer_live_demo.gif" alt="RoboSignFormer Real-Time State Machine & ONNX Inference Demo" width="92%" />
 
-*Real-time `IDLE → SIGNING → CONFIRMED` state machine running live `robosignformer_jetson.onnx` (`1.74M` params, `5.16 ms` CPU) on unseen-signer 80-landmark streams (`SELAM → TESEKKUR → DOKTOR`) and publishing to `/robodost/tts_speak`.*
+*Real-time `IDLE → SIGNING → CONFIRMED` state machine running live `robosignformer_jetson.onnx` (`1.74M` params, `5.16 ms` CPU) on unseen-signer 80-landmark streams (`SELAM → TESEKKUR → HASTANE`) and publishing to `/robodost/tts_speak`.*
 
 </div>
 
